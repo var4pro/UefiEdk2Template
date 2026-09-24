@@ -1,0 +1,3 @@
+[submodule "tools/clang-tidy-uefi"]
+	path = tools/clang-tidy-uefi
+	url = https://github.com/var4pro/ClangTidyUefi.git
