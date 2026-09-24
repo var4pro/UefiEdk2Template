@@ -34,7 +34,8 @@ GCC:*_*_X64_CC_FLAGS = -Wall -Wextra -Wpedantic -Wshadow -Wno-unused-parameter -
 GCC:*_*_X64_CC_FLAGS = -Wno-error
 
 #TODO: integrate analyzer into cicd pipeline
-GCC:NOOPT_*_X64_CC_FLAGS = -O0 -flto -fanalyzer
+GCC:ANALYZER_*_X64_CC_FLAGS = -O0 -fanalyzer -flto -g
+GCC:ASM_*_X64_CC_FLAGS = --save-temps -O0 -g -fverbose-asm -masm=intel -fno-asynchronous-unwind-tables
 
 [Depex]
   TRUE

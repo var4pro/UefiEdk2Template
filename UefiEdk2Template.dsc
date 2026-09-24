@@ -5,7 +5,7 @@
   DSC_SPECIFICATION              = 0x00010005
   OUTPUT_DIRECTORY               = Build/UefiEdk2Template
   SUPPORTED_ARCHITECTURES        = X64 | AARCH64
-  BUILD_TARGETS                  = DEBUG|RELEASE|NOOPT
+  BUILD_TARGETS                  = DEBUG|RELEASE|ANALYZER|ASM
   SKUID_IDENTIFIER               = DEFAULT
 
 [LibraryClasses]
