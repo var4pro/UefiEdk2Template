@@ -47,7 +47,7 @@ build:
 	build -n 0 -a X64 -t $(TOOLCHAIN_V) -p $(DSC_V) -b $(TARGET_V) $(EXTRA_FLAGS_V)
 
 copy: build
-	@BUILT_EFI=$$(find $(WORKSPACE_DIR_V)/edk2/Build/$(OUT_DIR_V)/$(TARGET_V)_$(TOOLCHAIN_V)/X64 -name "LogInDriver.efi" | head -n 1); \
+	@BUILT_EFI=$$(find $(WORKSPACE_DIR_V)/edk2/Build/$(OUT_DIR_V)/$(TARGET_V)_$(TOOLCHAIN_V)/X64 -name "UefiEdk2Template.efi" | head -n 1); \
 	if [ -z "$$BUILT_EFI" ]; then \
 		echo "[ERROR] EFI not found"; exit 1; \
 	fi; \
