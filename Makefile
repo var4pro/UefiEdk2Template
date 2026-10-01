@@ -1,5 +1,3 @@
-#Doesn't rebuild on changes in copy/run targets
-
 SHELL := /bin/bash
 
 .DELETE_ON_ERROR:
@@ -31,7 +29,7 @@ CURRENT_GOALS_V := $(or $(MAKECMDGOALS),all)
 # Goals that require WORKSPACE_DIR_V
 WORKSPACE_GOALS_V := all build copy run clean deep-build deep-clean deep-format-check-all hook-check analyzer
 # Goals that strictly require DISK_DIR_V (build and clean excluded)
-DISK_GOALS_V := all copy run
+DISK_GOALS_V := copy run
 
 ifneq ($(filter $(WORKSPACE_GOALS_V),$(CURRENT_GOALS_V)),)
 ifeq ($(strip $(WORKSPACE_DIR_V)),)
@@ -45,7 +43,7 @@ $(error [ERROR] Variable DISK_DIR_V isn't set! Set it on invoking make)
 endif
 endif
 
-.PHONY: all build copy run clean deep-build deep-clean generate-flags format-do tidy deep-format-check-all hook-check analyzer
+.PHONY: all build copy run clean deep-build deep-clean generate-flags format-do tidy deep-format-check-all hook-check analyzer init
 all: build
 
 #build
@@ -86,13 +84,17 @@ run: copy
 
 #clean
 clean:
-	rm -rf $(WORKSPACE_DIR_V)/edk2/Build/$(PLATFORM_NAME_V)
+	rm -rf $(WORKSPACE_DIR_V)/edk2/Build/$(PLATFORM_NAME_V)/$(TARGET_V)_$(TOOLCHAIN_V)/$(ARCH_V)/$(BASE_NAME_V)/
 	rm -f compile_flags.txt
 deep-clean: clean
+	rm -rf $(WORKSPACE_DIR_V)/edk2/Build/$(PLATFORM_NAME_V)
 	$(MAKE) -C tools/clang-tidy-uefi clean
 
 
 #flags
+ifneq ($(strip $(WORKSPACE_DIR_V)),)
+override WORKSPACE_DIR_V := $(abspath $(WORKSPACE_DIR_V))
+endif
 export EDK2_PATH_V := $(WORKSPACE_DIR_V)/edk2
 generate-flags: 
 	@rm -f compile_flags.txt
@@ -104,7 +106,7 @@ compile_flags.txt: compile_flags.txt.in
 	    exit 1; \
 	fi
 	@echo "Generating compile_flags.txt..."
-	@envsubst < $< > $@
+	@envsubst '$$EDK2_PATH_V' < $< > $@
 
 #tidy
 tidy: compile_flags.txt 
@@ -125,11 +127,10 @@ format-do:
 #Checking everything
 deep-format-check-all: format-do hook-check #manually invoke this
 
-hook-check: compile_flags.txt build tidy#auto invoking
+hook-check: compile_flags.txt build tidy #auto invoking
 	$(MAKE) -C tools/clang-tidy-uefi hook-check WORKSPACE_DIR_V=$(WORKSPACE_DIR_V)
 
-analyzer: override EXTRA_FLAGS_V += -D ANALYZER=TRUE
-analyzer: clean build
+#analyzer: #TODO MAKE IT WORKS LATER
 
 
 
