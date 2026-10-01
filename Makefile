@@ -68,7 +68,7 @@ copy: build
 	    cp -f "$$BUILT_EFI" $(TARGET_EFI_V)
 
 # not necessary
-TARGET_EFI_V := $(DISK_DIR_V)/App.efi
+TARGET_EFI_V := $(DISK_DIR_V)/BOOTX64.efi
 run: copy
 	qemu-system-x86_64 \
 	    -drive if=pflash,format=raw,readonly=on,file=$(BIOS_V) \
