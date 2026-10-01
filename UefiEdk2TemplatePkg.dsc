@@ -1,10 +1,12 @@
+#change PLATFORM_NAME, OUTPUT_DIRECTORY, [Components] section
+
 [Defines]
-  PLATFORM_NAME                  = UefiEdk2Template
+  PLATFORM_NAME                  = UefiEdk2TemplatePkg
   PLATFORM_GUID                  = F4A23A83-3009-4DEE-8113-BE7B62FCA9AA
   PLATFORM_VERSION               = 1.0
   DSC_SPECIFICATION              = 0x00010005
-  OUTPUT_DIRECTORY               = Build/UefiEdk2Template
-  SUPPORTED_ARCHITECTURES        = X64 | AARCH64
+  OUTPUT_DIRECTORY               = Build/UefiEdk2TemplatePkg
+  SUPPORTED_ARCHITECTURES        = X64
   BUILD_TARGETS                  = DEBUG|RELEASE|ANALYZER|ASM
   SKUID_IDENTIFIER               = DEFAULT
 
@@ -106,7 +108,22 @@
 
   StackCheckLib|MdePkg/Library/StackCheckLibNull/StackCheckLibNull.inf
 [Components]
-  UefiEdk2Template/UefiEdk2Template.inf
+  UefiEdk2Template/UefiEdk2Template.inf {
+    <BuildOptions>
+      # Base flags only for this driver
+      GCC:*_*_X64_CC_FLAGS = -std=c23 -I$(MODULE_DIR)/include/ -fstrict-flex-arrays=3 -ftrivial-auto-var-init=zero -fzero-init-padding-bits=all -funsigned-char -fno-delete-null-pointer-checks -fno-finite-loops -fno-strict-aliasing
+      GCC:*_*_X64_CC_FLAGS = -Wall -Wextra -Wpedantic -Wshadow -Wno-unused-parameter -Wpointer-arith -Wframe-larger-than=4096 -Wformat=2 -Wnull-dereference -Wswitch-enum -Wswitch-default -Wtrivial-auto-var-init -Wuseless-cast -Wstrict-flex-arrays -Wattribute-alias=2 -Wduplicated-branches -Wduplicated-cond -Wtrampolines -Wundef -Wcast-qual -Wwrite-strings -Wconversion -Wsign-conversion -Wflex-array-member-not-at-end -Wlogical-op -Wdeprecated-non-prototype -Wnested-externs -Winvalid-pch -Wvla-larger-than=1024 -Wno-error
+
+      # When running Analyzer
+      !if $(ANALYZER) == TRUE
+        GCC:*_*_X64_CC_FLAGS = -fanalyzer -flto
+      !endif
+
+      # When dumping ASM
+      !if $(ASM_DUMP) == TRUE
+        GCC:*_*_X64_CC_FLAGS = --save-temps -fverbose-asm -masm=intel -fno-asynchronous-unwind-tables
+      !endif
+  }
 
 [PcdsFixedAtBuild]
   !if $(TARGET) == DEBUG
