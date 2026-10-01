@@ -1,4 +1,9 @@
+#Doesn't rebuild on changes in copy/run targets
+
 SHELL := /bin/bash
+
+.DELETE_ON_ERROR:
+.NOTPARALLEL:
 
 C_FILES_V   := $(shell find src -type f -name "*.c" 2>/dev/null)
 H_FILES_V   := $(shell find include -type f -name "*.h" 2>/dev/null)
@@ -40,7 +45,7 @@ endif
 endif
 
 .PHONY: all build copy run clean deep-build deep-clean generate-flags format-do tidy deep-format-check-all hook-check analyzer
-all: run
+all: build
 
 #build
 build:

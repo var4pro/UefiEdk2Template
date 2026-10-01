@@ -24,7 +24,7 @@ jobs:
         with:
           context: .
           load: true
-          tags: clang-tidy-uefi-env:latest
+          tags: uefi-edk2-template-env:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -33,4 +33,4 @@ jobs:
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/host_code:ro" \
-            clang-tidy-uefi-env:latest
+            uefi-edk2-template-env:latest
