@@ -1,0 +1,36 @@
+name: Docker check
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  run-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Set up Docker Buildx to enable layer caching
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build image using GitHub Actions cache
+      - name: Build Docker Image (Cached)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: clang-tidy-uefi-env:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Run the test container
+      - name: Run Clang-Tidy & Tests
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/host_code:ro" \
+            clang-tidy-uefi-env:latest

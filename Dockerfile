@@ -52,4 +52,4 @@ RUN git clone --depth 1 -b edk2-stable202608 https://github.com/tianocore/edk2.g
 
 ENV WORKSPACE_DIR_V=/workspace
 WORKDIR /workspace/UefiEdk2Template
-CMD ["bash", "-c", "cp -r /host_code/. /workspace/UefiEdk2Template && make clean init format-check-all-recursive"]
+CMD ["bash", "-c", "cp -r /host_code/. /workspace/UefiEdk2Template && make deep-clean init deep-format-check-all ; exec bash"]

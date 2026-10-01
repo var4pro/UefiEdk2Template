@@ -23,7 +23,7 @@ DISK_DIR_V      ?=
 
 CURRENT_GOALS_V := $(or $(MAKECMDGOALS),all)
 # Goals that require WORKSPACE_DIR_V
-WORKSPACE_GOALS_V := all build copy run clean format-check-all-recursive hook-check analyzer
+WORKSPACE_GOALS_V := all build copy run clean deep-build deep-clean deep-format-check-all hook-check analyzer
 # Goals that strictly require DISK_DIR_V (build and clean excluded)
 DISK_GOALS_V := all copy run
 
@@ -39,7 +39,7 @@ $(error [ERROR] Variable DISK_DIR_V isn't set! Set it on invoking make)
 endif
 endif
 
-.PHONY: all build copy run clean generate-flags format-do tidy format-check-all-recursive hook-check analyzer
+.PHONY: all build copy run clean deep-build deep-clean generate-flags format-do tidy deep-format-check-all hook-check analyzer
 all: run
 
 #build
@@ -50,6 +50,9 @@ build:
 	    export EDK_TOOLS_PATH="$$PWD/BaseTools" && \
 	    source edksetup.sh && \
 	    build -n 0 -a $(ARCH_V) -t $(TOOLCHAIN_V) -p $(DSC_V) -b $(TARGET_V) $(EXTRA_FLAGS_V)
+
+deep-build: build
+	$(MAKE) -C tools/clang-tidy-uefi build
 
 copy: build
 	@BUILT_EFI=$$(find $(WORKSPACE_DIR_V)/edk2/Build/$(PLATFORM_NAME_V)/$(TARGET_V)_$(TOOLCHAIN_V)/$(ARCH_V)/ -name "$(BASE_NAME_V).efi" | head -n 1); \
@@ -70,11 +73,13 @@ run: copy
 #clean
 clean:
 	rm -rf $(WORKSPACE_DIR_V)/edk2/Build/$(PLATFORM_NAME_V)
+	rm -f compile_flags.txt
+deep-clean: clean
+	$(MAKE) -C tools/clang-tidy-uefi clean
 
-
-export EDK2_PATH_V := $(WORKSPACE_DIR_V)/edk2
 
 #flags
+export EDK2_PATH_V := $(WORKSPACE_DIR_V)/edk2
 generate-flags: 
 	@rm -f compile_flags.txt
 	@$(MAKE) compile_flags.txt
@@ -104,7 +109,7 @@ format-do:
 	@$(MAKE) -C tools/clang-tidy-uefi format-do
 
 #Checking everything
-format-check-all-recursive: format-do hook-check #manually invoke this
+deep-format-check-all: format-do hook-check #manually invoke this
 
 hook-check: compile_flags.txt build tidy#auto invoking
 	$(MAKE) -C tools/clang-tidy-uefi hook-check WORKSPACE_DIR_V=$(WORKSPACE_DIR_V)
