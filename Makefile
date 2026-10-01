@@ -13,6 +13,7 @@ SRC_FILES_V := $(C_FILES_V) $(H_FILES_V)
 BASE_NAME_V     := UefiEdk2Template
 PLATFORM_NAME_V := UefiEdk2TemplatePkg
 ARCH_V := X64
+
 BIOS_V ?= /usr/share/edk2/$(ARCH_V)/OVMF_CODE.4m.fd
 
 DSC_V         := $(notdir $(CURDIR))/$(notdir $(firstword $(wildcard $(CURDIR)/*.dsc)))
@@ -68,7 +69,15 @@ copy: build
 	    cp -f "$$BUILT_EFI" $(TARGET_EFI_V)
 
 # not necessary
-TARGET_EFI_V := $(DISK_DIR_V)/BOOTX64.efi
+ifeq ($(ARCH_V),X64)
+BOOT_NAME_V := BOOTX64.EFI
+else ifeq ($(ARCH_V),AARCH64)
+BOOT_NAME_V := BOOTAA64.EFI
+else
+$(error [ERROR] Unsupported ARCH_V '$(ARCH_V)', use X64 or AARCH64)
+endif
+
+TARGET_EFI_V := $(DISK_DIR_V)/EFI/BOOT/$(BOOT_NAME_V)
 run: copy
 	qemu-system-x86_64 \
 	    -drive if=pflash,format=raw,readonly=on,file=$(BIOS_V) \

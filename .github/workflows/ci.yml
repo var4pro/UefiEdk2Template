@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       # Set up Docker Buildx to enable layer caching
       - name: Set up Docker Buildx
