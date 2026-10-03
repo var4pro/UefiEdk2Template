@@ -7,7 +7,7 @@
   DSC_SPECIFICATION              = 0x00010005
   OUTPUT_DIRECTORY               = Build/UefiEdk2TemplatePkg
   SUPPORTED_ARCHITECTURES        = X64
-  BUILD_TARGETS                  = DEBUG|RELEASE|ANALYZER|ASM
+  BUILD_TARGETS                  = DEBUG|RELEASE
   SKUID_IDENTIFIER               = DEFAULT
 
 [LibraryClasses]
@@ -120,9 +120,10 @@
       !endif
 
       # When dumping ASM
-      !if $(ASM_DUMP) == TRUE
-        GCC:*_*_X64_CC_FLAGS = --save-temps -fverbose-asm -masm=intel -fno-asynchronous-unwind-tables
-      !endif
+      #!if $(ASM_DUMP) == TRUE
+      #  GCC:*_*_X64_CC_FLAGS = --save-temps -fverbose-asm -masm=intel -fno-asynchronous-unwind-tables -fno-lto
+      #  GCC:*_*_X64_DLINK_FLAGS = -fno-lto
+      #!endif
   }
 
 [PcdsFixedAtBuild]
