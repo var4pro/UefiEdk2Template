@@ -4,6 +4,8 @@
 -fshort-wchar
 -Iinclude/
 
+-Itests/unit/include
+
 -isystem
 $EDK2_PATH_V/ArmPkg/Include
 -isystem

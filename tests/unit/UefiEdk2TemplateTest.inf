@@ -1,27 +1,20 @@
 [Defines]
-  INF_VERSION                    = 0x00010005
-  BASE_NAME                      = UefiEdk2TemplateTest
-  FILE_GUID                      = 1A6FF461-0C3A-4351-B4BD-E596B27C6F7C
-  MODULE_TYPE                    = DXE_DRIVER
-  VERSION_STRING                 = 1.0
-  ENTRY_POINT                    = DriverEntryPoint
+  INF_VERSION    = 0x00010005
+  BASE_NAME      = UefiEdk2TemplateTest
+  FILE_GUID      = 736DB49D-D570-45A0-B3E8-757D7CA03671
+  MODULE_TYPE    = HOST_APPLICATION
+  VERSION_STRING = 1.0
 
 [Sources]
-  tests/unit/TestMain.c
+  src/TestMain.c
+  src/Greeting.c
 
 [Packages]
   MdePkg/MdePkg.dec
-  MdeModulePkg/MdeModulePkg.dec
+  UnitTestFrameworkPkg/UnitTestFrameworkPkg.dec
 
 [LibraryClasses]
-  UefiDriverEntryPoint
-  UefiBootServicesTableLib
-  UefiLib
   BaseLib
-  BaseMemoryLib
-
-[Protocols]
-
-
-[Depex]
-  TRUE
+  DebugLib
+  PrintLib
+  UnitTestLib

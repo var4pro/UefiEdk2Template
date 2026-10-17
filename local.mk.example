@@ -1,0 +1,4 @@
+WORKSPACE_DIR_V ?= $(HOME)/Documents/uefi_workspace
+DISK_DIR_V      ?= $(HOME)/Documents/uefi_workspace/disk
+# TARGET_V      ?= DEBUG
+# BIOS_V        ?= /usr/share/edk2/x64/OVMF_CODE.4m.fd

@@ -1,4 +1,4 @@
-#change PLATFORM_NAME, OUTPUT_DIRECTORY, [Components] section
+#change PLATFORM_NAME, OUTPUT_DIRECTORY, [Components] path section
 
 [Defines]
   PLATFORM_NAME                  = UefiEdk2TemplatePkg
@@ -108,7 +108,7 @@
 
   StackCheckLib|MdePkg/Library/StackCheckLibNull/StackCheckLibNull.inf
 [Components]
-  UefiEdk2Template/UefiEdk2Template.inf {
+   $(PKG_DIR)/$(MODULE_INF) {
     <BuildOptions>
       # Base flags only for this driver
       GCC:*_*_X64_CC_FLAGS = -std=c23 -I$(MODULE_DIR)/include/ -fstrict-flex-arrays=3 -ftrivial-auto-var-init=zero -fzero-init-padding-bits=all -funsigned-char -fno-delete-null-pointer-checks -fno-finite-loops -fno-strict-aliasing
