@@ -7,9 +7,10 @@
 #   make run-unit-test   WORKSPACE_DIR_V=<ws>                   build and run the host unit tests
 #   make clean | clean-unit-test | deep-clean
 #   make generate-flags  WORKSPACE_DIR_V=<ws>                   regenerate compile_flags.txt (clangd/clang-tidy)
+#   make analyzer        WORKSPACE_DIR_V=<ws>                   GCC -fanalyzer (LTO link over your objects + ANALYZER_LIBS_V), report filtered to src/ + include/
 #   make init            WORKSPACE_DIR_V=<ws>                   first-time setup: git hooks + template remote
 #   make print-<VAR>                                            show a variable, e.g. print-BUILD_OUT_V
-#   EXTRA_FLAGS_V="..."  extra args for the EDK2 build, e.g. EXTRA_FLAGS_V="-D ANALYZER=TRUE"
+#   EXTRA_FLAGS_V="..."  extra args for the EDK2 build, e.g. EXTRA_FLAGS_V="-D SOME_DEFINE=TRUE"
 #
 # Contract with both .dsc files (root and tests/unit):
 #   [Components]      $(PKG_DIR)/$(MODULE_INF)  <- both passed by this Makefile via -D
@@ -69,7 +70,7 @@ PLATFORM_NAME_V    := $(call get-define,$(ROOT_DSC_FILE_V),PLATFORM_NAME)
 OUTPUT_DIRECTORY_V := $(call get-define,$(ROOT_DSC_FILE_V),OUTPUT_DIRECTORY)
 
 override ARCH_V := X64
-BOOT_NAME_V     := BOOTX64.EFI
+BOOT_NAME_V     := App.efi
 BIOS_V          ?= $(firstword $(wildcard /usr/share/edk2/x64/OVMF_CODE.4m.fd /usr/share/OVMF/OVMF_CODE_4M.fd))
 
 # Passed to edk2-build: .dsc relative to PACKAGES_PATH, .inf relative to this folder
@@ -151,6 +152,7 @@ all: build
 build:
 	@$(call edk2-build,$(DSC_V),$(TARGET_V),$(ROOT_MODULE_INF_V))
 
+TARGET_EFI_V := $(DISK_DIR_V)/$(BOOT_NAME_V)
 copy: build
 	@if [ ! -f "$(ROOT_EFI_V)" ]; then \
         echo "[ERROR] $(ROOT_EFI_V) not found"; exit 1; \
@@ -159,13 +161,13 @@ copy: build
 	cp -f "$(ROOT_EFI_V)" $(TARGET_EFI_V)
 
 
-TARGET_EFI_V := $(DISK_DIR_V)/EFI/BOOT/$(BOOT_NAME_V)
 run: copy
 	@[ -f "$(BIOS_V)" ] || { echo "[ERROR] OVMF firmware not found ('$(BIOS_V)'). Install edk2-ovmf or set BIOS_V"; exit 1; }
 	qemu-system-x86_64 \
         -drive if=pflash,format=raw,readonly=on,file=$(BIOS_V) \
         -drive format=raw,file=fat:rw:$(DISK_DIR_V) \
-        -net none
+        -net none \
+		-serial file:uart.log
 
 #clean
 clean:
@@ -282,7 +284,50 @@ deep-clean: clean clean-unit-test
 	rm -rf $(call abs-out-dir,$(OUTPUT_DIRECTORY_V)) $(call abs-out-dir,$(UT_OUTPUT_DIRECTORY_V))
 	$(MAKE) -C tools/clang-tidy-uefi clean
         
-#analyzer: #TODO MAKE IT WORKS LATER
+#analyzer: GCC -fanalyzer in an extra LTO link over OUR objects + a few EDK2 libs, filtered to our files
+# Why not -fanalyzer in the .dsc: with -flto GCC analyzes at link time, and edk2 links the whole
+# module (BasePrintLib, UefiLib, ...). The analyzer runs out of budget in there
+# (-Wanalyzer-too-complex) and never reaches our code.
+# So after a normal build (DEBUG/RELEASE objects are LTO bytecode) we link again, only to analyze:
+#   our objects (object_files.lst) + the libraries in ANALYZER_LIBS_V, output thrown away.
+# -r -flinker-output=nolto-rel: partial link (undefined symbols are fine) that still runs the
+# real LTO pipeline (plain -r only merges the bytecode and never runs the analyzer).
+# The analyzer follows calls into ANALYZER_LIBS_V (e.g. AllocatePool() returning NULL);
+# calls into any other library stay opaque. Keep heavy ones (BasePrintLib, UefiLib) out.
+# Names = .lib file names, see <module>/OUTPUT/static_library_files.lst
+# Full log:  analyzer_full.log   Filtered: analyzer_report.txt
+ANALYZER_LIBS_V   ?= UefiMemoryAllocationLib
+ANALYZER_FLAGS_V  ?=
+ANALYZER_LOG_V    := $(CURDIR)/analyzer_full.log
+ANALYZER_REPORT_V := $(CURDIR)/analyzer_report.txt
+ANALYZER_PATHS_V  := $(CURDIR)/src/ $(CURDIR)/include/
+ANALYZER_OUT_V     = $(ROOT_MODULE_DIR_V)/OUTPUT
+
+ifneq ($(filter analyzer,$(CURRENT_GOALS_V)),)
+ifeq ($(TARGET_V),NOOPT)
+$(error [ERROR] analyzer needs LTO objects: use TARGET_V=DEBUG or RELEASE)
+endif
+endif
+
+analyzer: build
+	@libs=""; for l in $(ANALYZER_LIBS_V); do \
+        f=$$(grep -m1 "/$$l\.lib$$" "$(ANALYZER_OUT_V)/static_library_files.lst") \
+            && libs="$$libs $$f" \
+            || echo "[WARN] $$l.lib isn't linked into this module, skipped"; \
+    done; \
+    set -o pipefail; \
+    gcc -flto -Os -nostdlib -r -flinker-output=nolto-rel -o /dev/null \
+        -fanalyzer -Wanalyzer-too-complex -fdiagnostics-plain-output -fdiagnostics-path-format=separate-events \
+        $(ANALYZER_FLAGS_V) @$(ANALYZER_OUT_V)/object_files.lst -Wl,--start-group $$libs -Wl,--end-group \
+        2>&1 | tee $(ANALYZER_LOG_V)
+	@bash tools/analyzer-filter.sh $(ANALYZER_LOG_V) $(ANALYZER_PATHS_V) > $(ANALYZER_REPORT_V)
+	@if grep -q 'analysis bailed out early' $(ANALYZER_LOG_V); then \
+        echo "[WARN] analyzer ran out of budget, results are incomplete: drop heavy libs from ANALYZER_LIBS_V"; \
+    fi
+	@echo "[analyzer] full log: $(ANALYZER_LOG_V)"
+	@echo "[analyzer] report:   $(ANALYZER_REPORT_V)"
+	@cat $(ANALYZER_REPORT_V)
+
 #Checking everything
 deep-format-check-all: format-do hook-check #manually invoke this
 
@@ -295,7 +340,10 @@ print-%:
 	@echo '$* = $($*)  (origin: $(origin $*))'
 
 TEMPLATE_URL_V := https://github.com/var4pro/UefiEdk2Template.git
+TEMPLATE_NEW_NAME_V ?= UefiEdk2Template
+REPLACE_SCRIPT_PATH_V=./tools/replace-script.sh
 init: generate-flags
 	git config core.hooksPath .githooks
 	@git remote add template $(TEMPLATE_URL_V) 2>/dev/null || git remote set-url template $(TEMPLATE_URL_V)
 	git remote set-url --push template DISABLED
+	@bash $(REPLACE_SCRIPT_PATH_V) "$(TEMPLATE_NEW_NAME_V)"

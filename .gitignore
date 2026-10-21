@@ -2,4 +2,8 @@ src/maintest.c
 tidy_report.txt
 /compile_flags.txt
 .cache/
+.vscode/
 /local.mk
+/analyzer_full.log
+/analyzer_report.txt
+./uart.log

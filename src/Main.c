@@ -1,11 +1,11 @@
 #include "Nothing.h"
 
-#include <Uefi.h>
-#include <Base.h>
-#include <Library/UefiBootServicesTableLib.h>
-#include <Library/UefiDriverEntryPoint.h>
-#include <Library/UefiLib.h>
-#include <Library/BaseLib.h>
+#include <PiDxe.h>                            // <-- Use PiDxe.h for DXE Drivers!
+#include <Library/UefiLib.h>                  // For Print
+#include <Library/UefiBootServicesTableLib.h> // For gST and gBS
+#include <Library/UefiDriverEntryPoint.h>     // For DriverEntryPoint
+#include <Library/BaseLib.h>                  // For CpuDeadLoop
+#include <Library/DebugLib.h>
 
 EFI_STATUS EFIAPI DriverEntryPoint(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE* SystemTable) {
     (void)gST->ConOut->ClearScreen(gST->ConOut);
@@ -13,6 +13,7 @@ EFI_STATUS EFIAPI DriverEntryPoint(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABL
     Print(L"=========================================\n");
     Print(L"  Hello World from UEFI DXE Driver!      \n");
     Print(L"=========================================\n");
+    DEBUG((DEBUG_INFO, "Hello, UART!\n"));
 
     CpuDeadLoop();
     return EFI_SUCCESS;

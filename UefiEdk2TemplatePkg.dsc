@@ -63,7 +63,7 @@
   UefiUsbLib|MdePkg/Library/UefiUsbLib/UefiUsbLib.inf
   UefiScsiLib|MdePkg/Library/UefiScsiLib/UefiScsiLib.inf
   SecurityManagementLib|MdeModulePkg/Library/DxeSecurityManagementLib/DxeSecurityManagementLib.inf
-  SerialPortLib|MdePkg/Library/BaseSerialPortLibNull/BaseSerialPortLibNull.inf
+  SerialPortLib|MdeModulePkg/Library/BaseSerialPortLib16550/BaseSerialPortLib16550.inf
   CapsuleLib|MdeModulePkg/Library/DxeCapsuleLibNull/DxeCapsuleLibNull.inf
   PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
   CustomizedDisplayLib|MdeModulePkg/Library/CustomizedDisplayLib/CustomizedDisplayLib.inf
@@ -113,22 +113,23 @@
       # Base flags only for this driver
       GCC:*_*_X64_CC_FLAGS = -std=c23 -I$(MODULE_DIR)/include/ -fstrict-flex-arrays=3 -ftrivial-auto-var-init=zero -fzero-init-padding-bits=all -funsigned-char -fno-delete-null-pointer-checks -fno-finite-loops -fno-strict-aliasing
       GCC:*_*_X64_CC_FLAGS = -Wall -Wextra -Wpedantic -Wshadow -Wno-unused-parameter -Wpointer-arith -Wframe-larger-than=4096 -Wformat=2 -Wnull-dereference -Wswitch-enum -Wswitch-default -Wtrivial-auto-var-init -Wuseless-cast -Wstrict-flex-arrays -Wattribute-alias=2 -Wduplicated-branches -Wduplicated-cond -Wtrampolines -Wundef -Wcast-qual -Wwrite-strings -Wconversion -Wsign-conversion -Wflex-array-member-not-at-end -Wlogical-op -Wdeprecated-non-prototype -Wnested-externs -Winvalid-pch -Wvla-larger-than=1024 -Wno-error
+      #GCC:*_*_X64_CC_FLAGS = -w
 
-      # When running Analyzer
-      !if $(ANALYZER) == TRUE
-        GCC:*_*_X64_CC_FLAGS = -fanalyzer -flto
-      !endif
+      # Analyzer: no flags here. "make analyzer" runs -fanalyzer in its own LTO link over the
+      # objects of a normal DEBUG/RELEASE build (see the Makefile for why).
 
       # When dumping ASM
       #!if $(ASM_DUMP) == TRUE
-      #  GCC:*_*_X64_CC_FLAGS = --save-temps -fverbose-asm -masm=intel -fno-asynchronous-unwind-tables -fno-lto
-      #  GCC:*_*_X64_DLINK_FLAGS = -fno-lto
+      #  GCC:*_*_X64_CC_FLAGS = --save-temps -fverbose-asm -fno-asynchronous-unwind-tables
+      #  GCC:*_*_X64_DLINK_FLAGS = --save-temps -fverbose-asm -fno-asynchronous-unwind-tables
       #!endif
   }
 
 [PcdsFixedAtBuild]
-  !if $(TARGET) == DEBUG
-  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0xFFFFFFFF # DEBUG Build: Everything enabled (All 32 bits)
+!if $(TARGET) == DEBUG
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0xFFFFFFFF
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0x2F
 !else
-  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000002 # RELEASE Build: WARNING (0x02) and ERROR (0x80000000) only
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000002
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0x02
 !endif
