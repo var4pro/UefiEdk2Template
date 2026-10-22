@@ -16,8 +16,8 @@ if [[ ! "$NEW" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
     exit 1
 fi
 if [[ "$NEW" == "$OLD" ]]; then
-    echo "[ERROR] New name is the same as the old one"
-    exit 1
+    echo "[EXIT] New name is the same as the old one"
+    exit 0
 fi
 
 # find regular files matching the given -name tests, skipping .git, Build and edk2

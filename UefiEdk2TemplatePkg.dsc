@@ -117,6 +117,9 @@
 
       # Analyzer: no flags here. "make analyzer" runs -fanalyzer in its own LTO link over the
       # objects of a normal DEBUG/RELEASE build (see the Makefile for why).
+      !if $(ANALYZER) == TRUE
+        GCC:*_*_X64_DLINK_FLAGS = -fanalyzer -Wanalyzer-too-complex --param=analyzer-bb-explosion-factor=20 --param=analyzer-max-enodes-per-program-point=32 -fdiagnostics-add-output=sarif:file=analyzer.sarif
+      !endif
 
       # When dumping ASM
       #!if $(ASM_DUMP) == TRUE

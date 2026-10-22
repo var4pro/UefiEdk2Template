@@ -15,6 +15,8 @@ EFI_STATUS EFIAPI DriverEntryPoint(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABL
     Print(L"=========================================\n");
     DEBUG((DEBUG_INFO, "Hello, UART!\n"));
 
+    // UINT8* P = NULL;
+    //*P = 0; // expect -Wanalyzer-null-dereference
     CpuDeadLoop();
     return EFI_SUCCESS;
 }
