@@ -2,7 +2,7 @@
 
 [Defines]
   PLATFORM_NAME                  = UefiEdk2TemplatePkg
-  PLATFORM_GUID                  = F4A23A83-3009-4DEE-8113-BE7B62FCA9AA
+  PLATFORM_GUID                  = F6A12B05-8D4F-43D7-8CF3-BFD9F5A69096
   PLATFORM_VERSION               = 1.0
   DSC_SPECIFICATION              = 0x00010005
   OUTPUT_DIRECTORY               = Build/UefiEdk2TemplatePkg

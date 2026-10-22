@@ -1,2 +1,3 @@
 *.dsc linguist-language=INI
 *.inf linguist-language=INI
+*.dec linguist-language=INI
