@@ -2,9 +2,9 @@ name: Docker check
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, template ]
   pull_request:
-    branches: [ master, main ]
+    branches: [ master, main, template ]
 
 jobs:
   run-checks:
