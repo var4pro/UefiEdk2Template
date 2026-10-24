@@ -6,4 +6,4 @@ tidy_report.txt
 /local.mk
 /analyzer_full.log
 /analyzer_report.txt
-./uart.log
+/uart.log
