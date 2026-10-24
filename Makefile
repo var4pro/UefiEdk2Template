@@ -331,7 +331,7 @@ analyzer: build
 #Checking everything
 deep-format-check-all: format-do hook-check #manually invoke this
 
-hook-check: compile_flags.txt deep-build tidy #auto invoking
+hook-check: deep-clean deep-build tidy #auto invoking
 	$(MAKE) -C tools/clang-tidy-uefi hook-check WORKSPACE_DIR_V=$(WORKSPACE_DIR_V)
 
 
