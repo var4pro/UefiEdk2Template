@@ -115,11 +115,11 @@
       GCC:*_*_X64_CC_FLAGS = -Wall -Wextra -Wpedantic -Wshadow -Wno-unused-parameter -Wpointer-arith -Wframe-larger-than=4096 -Wformat=2 -Wnull-dereference -Wswitch-enum -Wswitch-default -Wtrivial-auto-var-init -Wuseless-cast -Wstrict-flex-arrays -Wattribute-alias=2 -Wduplicated-branches -Wduplicated-cond -Wtrampolines -Wundef -Wcast-qual -Wwrite-strings -Wconversion -Wsign-conversion -Wflex-array-member-not-at-end -Wlogical-op -Wdeprecated-non-prototype -Wnested-externs -Winvalid-pch -Wvla-larger-than=1024 -Wno-error
       #GCC:*_*_X64_CC_FLAGS = -w
 
-      # Analyzer: no flags here. "make analyzer" runs -fanalyzer in its own LTO link over the
-      # objects of a normal DEBUG/RELEASE build (see the Makefile for why).
-      !if $(ANALYZER) == TRUE
-        GCC:*_*_X64_DLINK_FLAGS = -fanalyzer -Wanalyzer-too-complex --param=analyzer-bb-explosion-factor=20 --param=analyzer-max-enodes-per-program-point=32 -fdiagnostics-add-output=sarif:file=analyzer.sarif
-      !endif
+      # Analyzer: no -fanalyzer here. On the module link it analyzes all of BasePrintLib, UefiLib, ...
+      # runs out of budget (-Wanalyzer-too-complex) and never reaches our code.
+      # "make analyzer" runs it in its own LTO link over the objects of a normal DEBUG/RELEASE build
+      # (see the Makefile). The header below gives it the AllocatePool/FreePool contracts instead.
+      GCC:*_*_X64_CC_FLAGS = -include $(MODULE_DIR)/tools/analyzer-models.h
 
       # When dumping ASM
       #!if $(ASM_DUMP) == TRUE

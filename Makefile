@@ -286,18 +286,31 @@ deep-clean: clean clean-unit-test
         
 #analyzer: GCC -fanalyzer in an extra LTO link over OUR objects + a few EDK2 libs, filtered to our files
 # Why not -fanalyzer in the .dsc: with -flto GCC analyzes at link time, and edk2 links the whole
-# module (BasePrintLib, UefiLib, ...). The analyzer runs out of budget in there
-# (-Wanalyzer-too-complex) and never reaches our code.
+# module (BasePrintLib, UefiLib, ...). Every function in there is an analysis root and one DEBUG()
+# dives into BasePrintLib's format loop: the global budget runs out ("analysis bailed out early",
+# -Wanalyzer-too-complex) and everything not explored yet, our code included, is simply dropped.
+# Raising the --param budgets doesn't fix it (measured: 13 min, 14 GB RAM, still 0 hits in src/).
 # So after a normal build (DEBUG/RELEASE objects are LTO bytecode) we link again, only to analyze:
 #   our objects (object_files.lst) + the libraries in ANALYZER_LIBS_V, output thrown away.
 # -r -flinker-output=nolto-rel: partial link (undefined symbols are fine) that still runs the
 # real LTO pipeline (plain -r only merges the bytecode and never runs the analyzer).
-# The analyzer follows calls into ANALYZER_LIBS_V (e.g. AllocatePool() returning NULL);
-# calls into any other library stay opaque. Keep heavy ones (BasePrintLib, UefiLib) out.
+# Calls into libraries that aren't linked stay opaque. What the analyzer needs to know about
+# them comes from tools/analyzer-models.h (force-included by the .dsc): EDK2 contracts for
+# MemoryAllocationLib, BaseMemoryLib, BaseLib, PrintLib, DevicePathLib, UefiLib (X64):
+# NULL returns, leaks, double free, use after free, FreePool on AllocatePages memory,
+# NULL arguments, buffer sizes (StrCpyS DestMax, CopyMem Length, ...).
+# ANALYZER_LIBS_V: extra small libraries the analyzer should step into. Keep heavy ones
+# (BasePrintLib, UefiLib, DebugLib) out, and don't add UefiMemoryAllocationLib: its real code
+# replaces the models and leak/double-free/use-after-free checks are lost.
 # Names = .lib file names, see <module>/OUTPUT/static_library_files.lst
+# ANALYZER_LEAKS_V=1: also report leaks (-Wanalyzer-malloc-leak). Off by default: GCC reports a
+# false leak whenever only a field's address leaves the function, which is how EDK2 hands out
+# ownership: InsertTailList (&List, &Node->Link), InstallProtocolInterface (..., &Private->Protocol).
 # Full log:  analyzer_full.log   Filtered: analyzer_report.txt
-ANALYZER_LIBS_V   ?= UefiMemoryAllocationLib
+ANALYZER_LIBS_V   ?=
+ANALYZER_LEAKS_V  ?= 0
 ANALYZER_FLAGS_V  ?=
+ANALYZER_LEAK_FLAG_V = $(if $(filter 1,$(ANALYZER_LEAKS_V)),,-Wno-analyzer-malloc-leak)
 ANALYZER_LOG_V    := $(CURDIR)/analyzer_full.log
 ANALYZER_REPORT_V := $(CURDIR)/analyzer_report.txt
 ANALYZER_PATHS_V  := $(CURDIR)/src/ $(CURDIR)/include/
@@ -318,7 +331,7 @@ analyzer: build
     set -o pipefail; \
     gcc -flto -Os -nostdlib -r -flinker-output=nolto-rel -o /dev/null \
         -fanalyzer -Wanalyzer-too-complex -fdiagnostics-plain-output -fdiagnostics-path-format=separate-events \
-        $(ANALYZER_FLAGS_V) @$(ANALYZER_OUT_V)/object_files.lst -Wl,--start-group $$libs -Wl,--end-group \
+        $(ANALYZER_LEAK_FLAG_V) $(ANALYZER_FLAGS_V) @$(ANALYZER_OUT_V)/object_files.lst -Wl,--start-group $$libs -Wl,--end-group \
         2>&1 | tee $(ANALYZER_LOG_V)
 	@bash tools/analyzer-filter.sh $(ANALYZER_LOG_V) $(ANALYZER_PATHS_V) > $(ANALYZER_REPORT_V)
 	@if grep -q 'analysis bailed out early' $(ANALYZER_LOG_V); then \
