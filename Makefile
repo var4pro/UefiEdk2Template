@@ -344,5 +344,5 @@ TEMPLATE_NEW_NAME_V ?= UefiEdk2Template
 REPLACE_SCRIPT_PATH_V=./tools/replace-script.sh
 init: generate-flags
 	git config core.hooksPath .githooks
-	@git remote add template $(TEMPLATE_URL_V)
+	-@git remote add template $(TEMPLATE_URL_V) 2>/dev/null
 	@bash $(REPLACE_SCRIPT_PATH_V) "$(TEMPLATE_NEW_NAME_V)"
