@@ -160,14 +160,14 @@ copy: build
 	mkdir -p $(DISK_DIR_V)/EFI/BOOT
 	cp -f "$(ROOT_EFI_V)" $(TARGET_EFI_V)
 
-
+UART_LOG_V := $(CURDIR)/logs/uart.log
 run: copy
 	@[ -f "$(BIOS_V)" ] || { echo "[ERROR] OVMF firmware not found ('$(BIOS_V)'). Install edk2-ovmf or set BIOS_V"; exit 1; }
 	qemu-system-x86_64 \
         -drive if=pflash,format=raw,readonly=on,file=$(BIOS_V) \
         -drive format=raw,file=fat:rw:$(DISK_DIR_V) \
         -net none \
-		-serial file:uart.log
+		-serial file:$(UART_LOG_V)
 
 #clean
 clean:
@@ -311,8 +311,8 @@ ANALYZER_LIBS_V   ?=
 ANALYZER_LEAKS_V  ?= 0
 ANALYZER_FLAGS_V  ?=
 ANALYZER_LEAK_FLAG_V = $(if $(filter 1,$(ANALYZER_LEAKS_V)),,-Wno-analyzer-malloc-leak)
-ANALYZER_LOG_V    := $(CURDIR)/analyzer_full.log
-ANALYZER_REPORT_V := $(CURDIR)/analyzer_report.txt
+ANALYZER_LOG_V    := $(CURDIR)/logs/analyzer_full.log
+ANALYZER_REPORT_V := $(CURDIR)/logs/analyzer_report.log
 ANALYZER_PATHS_V  := $(CURDIR)/src/ $(CURDIR)/include/
 ANALYZER_OUT_V     = $(ROOT_MODULE_DIR_V)/OUTPUT
 
