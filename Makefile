@@ -16,7 +16,7 @@
 #
 #   EXTRA_FLAGS_V="..."  extra args for the EDK2 build, e.g. EXTRA_FLAGS_V="-D SOME_DEFINE=TRUE"
 #
-# Contract with both .dsc files (root and tests/unit):
+# Contract with the .dsc files (root, tests/unit and tests/fuzz):
 #   [Components]      $(PKG_DIR)/$(MODULE_INF)  <- both passed by this Makefile via -D
 #   OUTPUT_DIRECTORY  literal path, unique per platform (deep-clean deletes it)
 # ===========================================================================
@@ -35,7 +35,6 @@ ROOT_SRC_FILES_V := $(ROOT_C_FILES_V) $(ROOT_H_FILES_V)
 
 # ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 # $(call get-define,<file>,<KEY>) -> value of the first "KEY = value" line.
 get-define = $(strip $(if $(1),$(shell sed -n -E 's/^[[:space:]]*$(2)[[:space:]]*=[[:space:]]*([^[:space:]]+).*/\1/p' '$(1)' | head -n 1)))
 
@@ -55,6 +54,39 @@ edk2-build = cd $(EDK2_PATH_V) && \
     source edksetup.sh && \
     build -n 0 -a $(ARCH_V) -t $(TOOLCHAIN_V) -p $(1) -b $(2) \
           -D PKG_DIR=$(PKG_DIR_V) -D MODULE_INF=$(3) $(EXTRA_FLAGS_V)
+
+# $(call expand-path,<path>) -> absolute path with a leading ~ expanded
+# (zsh/fish pass VAR=~/x to make literally, and make's abspath doesn't expand ~)
+expand-path = $(abspath $(patsubst ~/%,$(HOME)/%,$(patsubst ~,$(HOME),$(strip $(1)))))
+
+# Checks run while make reads this file, i.e. before any build starts.
+# No commas inside messages: a comma starts the next argument of $(call).
+
+# $(call need,<value>,<message>)               error if <value> is empty
+need = $(if $(strip $(1)),,$(error [ERROR] $(2)))
+
+# $(call need-cmd,<command>,<hint>)            error if <command> is not in PATH
+need-cmd = $(call need,$(shell command -v $(1) 2>/dev/null),'$(1)' not found: $(2))
+
+# $(call warn-if-many,<list>,<where>,<kind>)  warning if there is more than one file
+warn-if-many = $(if $(word 2,$(1)),$(warning [WARN] Multiple $(3) files in $(2): using $(notdir $(firstword $(1)))))
+
+# $(call goal-in,<goals>)                      non-empty if one of the goals was requested
+goal-in = $(filter $(1),$(CURRENT_GOALS_V))
+
+# $(call distinct,<a>,<b>)                     error if two platforms share an OUTPUT_DIRECTORY
+distinct = $(if $(and $(strip $(1)),$(filter $(1),$(2))),$(error [ERROR] OUTPUT_DIRECTORY '$(1)' is used by two platforms: it must be unique per platform))
+
+# $(call check-project,<dir>,<inf list>,<dsc list>,<BASE_NAME>,<PLATFORM_NAME>,<OUTPUT_DIRECTORY>)
+# One check for the root, tests/unit and tests/fuzz. Order: files first, then values read from them.
+check-project = \
+    $(call need,$(2),No .inf file found in $(1)) \
+    $(call need,$(3),No .dsc file found in $(1)) \
+    $(call need,$(4),BASE_NAME not found in $(firstword $(2))) \
+    $(call need,$(5),PLATFORM_NAME not found in $(firstword $(3))) \
+    $(call need,$(6),OUTPUT_DIRECTORY not found in $(firstword $(3))) \
+    $(call warn-if-many,$(2),$(1),.inf) \
+    $(call warn-if-many,$(3),$(1),.dsc)
 
 # ---------------------------------------------------------------------------
 # Auto-detected project info (from the first .inf / .dsc in the project root)
@@ -88,10 +120,6 @@ EXTRA_FLAGS_V     ?=
 WORKSPACE_DIR_V ?=
 DISK_DIR_V      ?=
 
-# $(call expand-path,<path>) -> absolute path with a leading ~ expanded
-# (zsh/fish pass VAR=~/x to make literally, and make's abspath doesn't expand ~)
-expand-path = $(abspath $(patsubst ~/%,$(HOME)/%,$(patsubst ~,$(HOME),$(strip $(1)))))
-
 ifneq ($(strip $(WORKSPACE_DIR_V)),)
 override WORKSPACE_DIR_V := $(call expand-path,$(WORKSPACE_DIR_V))
 endif
@@ -116,37 +144,13 @@ WORKSPACE_GOALS_V := all build copy run clean deep-build deep-clean deep-format-
 # Goals that strictly require DISK_DIR_V (build and clean excluded)
 DISK_GOALS_V := copy run
 
-ifneq ($(filter $(WORKSPACE_GOALS_V),$(CURRENT_GOALS_V)),)
-ifeq ($(strip $(WORKSPACE_DIR_V)),)
-$(error [ERROR] Variable WORKSPACE_DIR_V isn't set! Set it on invoking make)
+ifneq ($(call goal-in,$(WORKSPACE_GOALS_V)),)
+$(call need,$(WORKSPACE_DIR_V),Variable WORKSPACE_DIR_V isn't set! Set it on invoking make)
+$(call need,$(wildcard $(EDK2_PATH_V)/edksetup.sh),$(EDK2_PATH_V)/edksetup.sh not found: WORKSPACE_DIR_V must be the folder CONTAINING edk2/)
+$(call check-project,$(CURDIR),$(INF_FILES_V),$(DSC_FILES_V),$(BASE_NAME_V),$(PLATFORM_NAME_V),$(OUTPUT_DIRECTORY_V))
 endif
-ifeq ($(ROOT_INF_FILE_V),)
-$(error [ERROR] No .inf file found in $(CURDIR))
-endif
-ifeq ($(ROOT_DSC_FILE_V),)
-$(error [ERROR] No .dsc file found in $(CURDIR))
-endif
-ifeq ($(BASE_NAME_V),)
-$(error [ERROR] BASE_NAME not found in $(ROOT_INF_FILE_V))
-endif
-ifeq ($(PLATFORM_NAME_V),)
-$(error [ERROR] PLATFORM_NAME not found in $(ROOT_DSC_FILE_V))
-endif
-ifeq ($(OUTPUT_DIRECTORY_V),)
-$(error [ERROR] OUTPUT_DIRECTORY not found in $(ROOT_DSC_FILE_V))
-endif
-ifneq ($(word 2,$(INF_FILES_V)),)
-$(warning [WARN] Multiple .inf files in root, using $(notdir $(ROOT_INF_FILE_V)))
-endif
-ifneq ($(word 2,$(DSC_FILES_V)),)
-$(warning [WARN] Multiple .dsc files in root, using $(notdir $(ROOT_DSC_FILE_V)))
-endif
-endif
-
-ifneq ($(filter $(DISK_GOALS_V),$(CURRENT_GOALS_V)),)
-ifeq ($(strip $(DISK_DIR_V)),)
-$(error [ERROR] Variable DISK_DIR_V isn't set! Set it on invoking make)
-endif
+ifneq ($(call goal-in,$(DISK_GOALS_V)),)
+$(call need,$(DISK_DIR_V),Variable DISK_DIR_V isn't set! Set it on invoking make)
 endif
 
 .PHONY: all build copy run clean deep-build deep-clean generate-flags format-do tidy deep-format-check-all hook-check analyzer init \
@@ -167,7 +171,6 @@ copy: build
 
 UART_LOG_V := $(CURDIR)/logs/uart.log
 run: copy
-	@[ -f "$(BIOS_V)" ] || { echo "[ERROR] OVMF firmware not found ('$(BIOS_V)'). Install edk2-ovmf or set BIOS_V"; exit 1; }
 	qemu-system-x86_64 \
         -drive if=pflash,format=raw,readonly=on,file=$(BIOS_V) \
         -drive format=raw,file=fat:rw:$(DISK_DIR_V) \
@@ -181,7 +184,7 @@ clean:
 
 
 #flags
-generate-flags: 
+generate-flags:
 	@rm -f compile_flags.txt
 	@$(MAKE) compile_flags.txt
 
@@ -194,12 +197,14 @@ compile_flags.txt: compile_flags.txt.in
 	@envsubst '$$EDK2_PATH_V' < $< > $@
 
 #tidy
-tidy: compile_flags.txt 
+tidy: compile_flags.txt
 	$(MAKE) -C tools/clang-tidy-uefi build
 	clang-tidy --warnings-as-errors='*' --load=tools/clang-tidy-uefi/build/libUefiTidyModule.so $(ROOT_C_FILES_V)
 
 
-#unit host-based tests:
+# ===========================================================================
+# UNIT HOST-BASED TESTS
+# ===========================================================================
 UT_DIR_V              := tests/unit
 UT_INF_FILES_V        := $(sort $(wildcard $(CURDIR)/$(UT_DIR_V)/*.inf))
 UT_DSC_FILES_V        := $(sort $(wildcard $(CURDIR)/$(UT_DIR_V)/*.dsc))
@@ -222,30 +227,10 @@ UNIT_TEST_C_FILES_V   := $(shell find $(UT_DIR_V)/src -type f -name "*.c" 2>/dev
 UNIT_TEST_H_FILES_V   := $(shell find $(UT_DIR_V)/include -type f -name "*.h" 2>/dev/null)
 UNIT_TEST_SRC_FILES_V := $(UNIT_TEST_C_FILES_V) $(UNIT_TEST_H_FILES_V)
 
-UT_GOALS_V := build-unit-test copy-unit-test run-unit-test clean-unit-test deep-build deep-clean
+UT_GOALS_V := build-unit-test copy-unit-test run-unit-test clean-unit-test deep-build deep-clean hook-check deep-format-check-all
 
-ifneq ($(filter $(UT_GOALS_V),$(CURRENT_GOALS_V)),)
-ifeq ($(UT_INF_FILE_V),)
-$(error [ERROR] No .inf file found in $(UT_DIR_V))
-endif
-ifeq ($(UT_DSC_FILE_V),)
-$(error [ERROR] No .dsc file found in $(UT_DIR_V))
-endif
-ifeq ($(UT_BASE_NAME_V),)
-$(error [ERROR] BASE_NAME not found in $(UT_INF_FILE_V))
-endif
-ifeq ($(UT_PLATFORM_NAME_V),)
-$(error [ERROR] PLATFORM_NAME not found in $(UT_DSC_FILE_V))
-endif
-ifeq ($(UT_OUTPUT_DIRECTORY_V),)
-$(error [ERROR] OUTPUT_DIRECTORY not found in $(UT_DSC_FILE_V))
-endif
-ifneq ($(word 2,$(UT_INF_FILES_V)),)
-$(warning [WARN] Multiple .inf files in $(UT_DIR_V), using $(notdir $(UT_INF_FILE_V)))
-endif
-ifneq ($(word 2,$(UT_DSC_FILES_V)),)
-$(warning [WARN] Multiple .dsc files in $(UT_DIR_V), using $(notdir $(UT_DSC_FILE_V)))
-endif
+ifneq ($(call goal-in,$(UT_GOALS_V)),)
+$(call check-project,$(UT_DIR_V),$(UT_INF_FILES_V),$(UT_DSC_FILES_V),$(UT_BASE_NAME_V),$(UT_PLATFORM_NAME_V),$(UT_OUTPUT_DIRECTORY_V))
 endif
 
 build-unit-test:
@@ -263,11 +248,6 @@ run-unit-test: copy-unit-test
 clean-unit-test:
 	rm -rf $(UT_MODULE_DIR_V) $(UT_BIN_V)
 	rm -f ./$(UT_BASE_NAME_V)
-
-
-
-
-
 
 
 #for normal and unit testing
@@ -288,7 +268,7 @@ deep-build: build build-unit-test
 deep-clean: clean clean-unit-test
 	rm -rf $(call abs-out-dir,$(OUTPUT_DIRECTORY_V)) $(call abs-out-dir,$(UT_OUTPUT_DIRECTORY_V))
 	$(MAKE) -C tools/clang-tidy-uefi clean
-        
+
 #analyzer: GCC -fanalyzer in an extra LTO link over OUR objects + a few EDK2 libs, filtered to our files
 # Why not -fanalyzer in the .dsc: with -flto GCC analyzes at link time, and edk2 links the whole
 # module (BasePrintLib, UefiLib, ...). Every function in there is an analysis root and one DEBUG()
@@ -321,7 +301,7 @@ ANALYZER_REPORT_V := $(CURDIR)/logs/analyzer_report.log
 ANALYZER_PATHS_V  := $(CURDIR)/src/ $(CURDIR)/include/
 ANALYZER_OUT_V     = $(ROOT_MODULE_DIR_V)/OUTPUT
 
-ifneq ($(filter analyzer,$(CURRENT_GOALS_V)),)
+ifneq ($(call goal-in,analyzer),)
 ifeq ($(TARGET_V),NOOPT)
 $(error [ERROR] analyzer needs LTO objects: use TARGET_V=DEBUG or RELEASE)
 endif
@@ -348,8 +328,9 @@ analyzer: build
 	@cat $(ANALYZER_REPORT_V)
 
 
-
-#fuzzing: AFL++ (afl-gcc-fast) host-based, same build model as the unit tests
+# ===========================================================================
+# FUZZING: AFL++ (afl-gcc-fast) host-based, same build model as the unit tests
+# ===========================================================================
 FZ_DIR_V              := tests/fuzz
 FZ_INF_FILES_V        := $(sort $(wildcard $(CURDIR)/$(FZ_DIR_V)/*.inf))
 FZ_DSC_FILES_V        := $(sort $(wildcard $(CURDIR)/$(FZ_DIR_V)/*.dsc))
@@ -390,40 +371,22 @@ FUZZ_SRC_FILES_V := $(FUZZ_C_FILES_V) $(FUZZ_H_FILES_V)
 
 FZ_GOALS_V := build-fuzz copy-fuzz run-fuzz repro-fuzz clean-fuzz
 
-ifneq ($(filter $(FZ_GOALS_V),$(CURRENT_GOALS_V)),)
-ifeq ($(FZ_INF_FILE_V),)
-$(error [ERROR] No .inf file found in $(FZ_DIR_V))
+ifneq ($(call goal-in,$(FZ_GOALS_V)),)
+$(call check-project,$(FZ_DIR_V),$(FZ_INF_FILES_V),$(FZ_DSC_FILES_V),$(FZ_BASE_NAME_V),$(FZ_PLATFORM_NAME_V),$(FZ_OUTPUT_DIRECTORY_V))
 endif
-ifeq ($(FZ_DSC_FILE_V),)
-$(error [ERROR] No .dsc file found in $(FZ_DIR_V))
+ifneq ($(call goal-in,build-fuzz copy-fuzz run-fuzz repro-fuzz),)
+$(call need-cmd,$(FZ_CC_V),install AFL++ or set FZ_CC_V)
 endif
-ifeq ($(FZ_BASE_NAME_V),)
-$(error [ERROR] BASE_NAME not found in $(FZ_INF_FILE_V))
+ifneq ($(call goal-in,run-fuzz),)
+$(call need-cmd,$(FZ_AFL_FUZZ_V),install AFL++ or set FZ_AFL_FUZZ_V)
 endif
-ifeq ($(FZ_PLATFORM_NAME_V),)
-$(error [ERROR] PLATFORM_NAME not found in $(FZ_DSC_FILE_V))
-endif
-ifeq ($(FZ_OUTPUT_DIRECTORY_V),)
-$(error [ERROR] OUTPUT_DIRECTORY not found in $(FZ_DSC_FILE_V))
-endif
-ifneq ($(word 2,$(FZ_INF_FILES_V)),)
-$(warning [WARN] Multiple .inf files in $(FZ_DIR_V), using $(notdir $(FZ_INF_FILE_V)))
-endif
-ifneq ($(word 2,$(FZ_DSC_FILES_V)),)
-$(warning [WARN] Multiple .dsc files in $(FZ_DIR_V), using $(notdir $(FZ_DSC_FILE_V)))
-endif
-endif
-
-ifneq ($(filter repro-fuzz,$(CURRENT_GOALS_V)),)
-ifeq ($(strip $(FZ_INPUT_V)),)
-$(error [ERROR] Set FZ_INPUT_V=<file>, e.g. one from $(FZ_OUT_V)/default/crashes/)
-endif
+ifneq ($(call goal-in,repro-fuzz),)
+$(call need,$(strip $(FZ_INPUT_V)),Set FZ_INPUT_V=<file> (for example one from logs/fuzz/default/crashes))
 endif
 
 build-fuzz: override EXTRA_FLAGS_V += $(FZ_DEFINES_V)
 build-fuzz:
-	@command -v $(FZ_CC_V) >/dev/null || { echo "[ERROR] $(FZ_CC_V) not found: install AFL++ or set FZ_CC_V"; exit 1; }
-	@export AFL_QUIET=1 && $(call edk2-build,$(FZ_DSC_V),$(FZ_TARGET_V),$(FZ_MODULE_INF_V),$(FZ_DEFINES_V))
+	@export AFL_QUIET=1 && $(call edk2-build,$(FZ_DSC_V),$(FZ_TARGET_V),$(FZ_MODULE_INF_V))
 
 copy-fuzz: build-fuzz
 	@if [ ! -f "$(FZ_BIN_V)" ]; then \
@@ -446,6 +409,30 @@ clean-fuzz:
 	rm -rf $(FZ_MODULE_DIR_V) $(FZ_BIN_V)
 	rm -f ./$(FZ_BASE_NAME_V)
 
+
+# CROSS-CUTTING CHECKS (need the variables of all three platforms)
+
+# Tools: checked up front, not after a long build
+ifneq ($(call goal-in,run),)
+$(call need-cmd,qemu-system-x86_64,install qemu)
+$(call need,$(wildcard $(BIOS_V)),OVMF firmware not found ('$(BIOS_V)'): install edk2-ovmf or set BIOS_V)
+endif
+ifneq ($(call goal-in,tidy deep-build hook-check deep-format-check-all),)
+$(call need-cmd,clang-tidy,install clang)
+$(call need-cmd,cmake,install cmake)
+endif
+ifneq ($(call goal-in,format-do deep-format-check-all),)
+$(call need-cmd,clang-format,install clang)
+endif
+ifneq ($(call goal-in,generate-flags init),)
+$(call need-cmd,envsubst,install gettext)
+endif
+ifneq ($(call goal-in,init),)
+$(call need-cmd,uuidgen,install util-linux or uuid-runtime)
+endif
+ifneq ($(call goal-in,analyzer),)
+$(call need-cmd,gcc,install gcc)
+endif
 
 
 #Checking everything
