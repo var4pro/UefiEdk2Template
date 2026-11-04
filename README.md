@@ -51,4 +51,6 @@ The folder name doesn't matter to the build, so rename it as you like.
 ├── src/                        driver sources
 ├── include/                    driver headers (on the include path)
 ├── tests/unit/                 host unit tests: own .inf/.dsc, src/, include/
+├── tests/fuzz/                 fizzing: own .inf/.dsc, src/, include/
 ├── tools/
+├── logs/                       stores logs/outputs

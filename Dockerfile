@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nasm \
     python3 \
     uuid-dev \
+    uuid-runtime \
     clang-22 \
     clang-tidy-22 \
     clang-format-22 \
