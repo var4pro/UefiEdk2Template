@@ -1,0 +1,19 @@
+[Defines]
+  INF_VERSION    = 0x00010005
+  BASE_NAME      = UefiEdk2TemplateFuzz
+  FILE_GUID      = B7DEF191-A602-4157-AB9E-E627348F8D58
+  MODULE_TYPE    = HOST_APPLICATION
+  VERSION_STRING = 1.0
+
+[Sources]
+  src/Fuzz.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  UnitTestFrameworkPkg/UnitTestFrameworkPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  DebugLib
+  MemoryAllocationLib

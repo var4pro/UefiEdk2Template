@@ -6,6 +6,14 @@
 
 -Itests/unit/include
 
+-Itests/fuzz/include
+-D__AFL_FUZZ_INIT()=
+-D__AFL_INIT()=
+-D__AFL_LOOP(x)=1
+-D__AFL_FUZZ_TESTCASE_BUF=((unsigned char *)0)
+-D__AFL_FUZZ_TESTCASE_LEN=0
+-Itests/fuzz/include
+
 -isystem
 $EDK2_PATH_V/ArmPkg/Include
 -isystem

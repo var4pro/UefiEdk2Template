@@ -6,3 +6,4 @@ tidy_report.txt
 /local.mk
 /logs/
 /UefiEdk2TemplateTest
+/UefiEdk2TemplateFuzz

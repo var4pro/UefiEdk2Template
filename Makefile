@@ -10,6 +10,10 @@
 #   make analyzer        WORKSPACE_DIR_V=<ws>                   GCC -fanalyzer (LTO link over your objects + ANALYZER_LIBS_V), report filtered to src/ + include/
 #   make init            WORKSPACE_DIR_V=<ws>                   first-time setup: git hooks + template remote
 #   make print-<VAR>                                            show a variable, e.g. print-BUILD_OUT_V
+#   make run-fuzz        WORKSPACE_DIR_V=<ws>                   build the AFL++ fuzzer and fuzz tests/fuzz/corpus -> logs/fuzz (FZ_TIME_V=<sec>)
+#   make repro-fuzz      WORKSPACE_DIR_V=<ws> FZ_INPUT_V=<file> rerun one input with ASan/UBSan reports
+#   make build-fuzz | clean-fuzz                                FZ_DEMO_BUG_V=1 plants a known bug (to check the setup)
+#
 #   EXTRA_FLAGS_V="..."  extra args for the EDK2 build, e.g. EXTRA_FLAGS_V="-D SOME_DEFINE=TRUE"
 #
 # Contract with both .dsc files (root and tests/unit):
@@ -107,7 +111,8 @@ ROOT_EFI_V        = $(BUILD_OUT_V)/$(BASE_NAME_V).efi
 CURRENT_GOALS_V := $(or $(MAKECMDGOALS),all)
 # Goals that require WORKSPACE_DIR_V (and a valid .inf/.dsc)
 WORKSPACE_GOALS_V := all build copy run clean deep-build deep-clean deep-format-check-all hook-check analyzer \
-                     build-unit-test copy-unit-test run-unit-test clean-unit-test
+                     build-unit-test copy-unit-test run-unit-test clean-unit-test \
+                     build-fuzz copy-fuzz run-fuzz repro-fuzz clean-fuzz
 # Goals that strictly require DISK_DIR_V (build and clean excluded)
 DISK_GOALS_V := copy run
 
@@ -145,7 +150,7 @@ endif
 endif
 
 .PHONY: all build copy run clean deep-build deep-clean generate-flags format-do tidy deep-format-check-all hook-check analyzer init \
-        build-unit-test copy-unit-test run-unit-test clean-unit-test
+        build-unit-test copy-unit-test run-unit-test clean-unit-test build-fuzz copy-fuzz run-fuzz repro-fuzz clean-fuzz
 
 all: build
 #build
@@ -322,6 +327,7 @@ $(error [ERROR] analyzer needs LTO objects: use TARGET_V=DEBUG or RELEASE)
 endif
 endif
 
+#TODO: get real flags for analyzer
 analyzer: build
 	@libs=""; for l in $(ANALYZER_LIBS_V); do \
         f=$$(grep -m1 "/$$l\.lib$$" "$(ANALYZER_OUT_V)/static_library_files.lst") \
@@ -341,9 +347,111 @@ analyzer: build
 	@echo "[analyzer] report:   $(ANALYZER_REPORT_V)"
 	@cat $(ANALYZER_REPORT_V)
 
+
+
+#fuzzing: AFL++ (afl-gcc-fast) host-based, same build model as the unit tests
+FZ_DIR_V              := tests/fuzz
+FZ_INF_FILES_V        := $(sort $(wildcard $(CURDIR)/$(FZ_DIR_V)/*.inf))
+FZ_DSC_FILES_V        := $(sort $(wildcard $(CURDIR)/$(FZ_DIR_V)/*.dsc))
+FZ_INF_FILE_V         := $(firstword $(FZ_INF_FILES_V))
+FZ_DSC_FILE_V         := $(firstword $(FZ_DSC_FILES_V))
+FZ_BASE_NAME_V        := $(call get-define,$(FZ_INF_FILE_V),BASE_NAME)
+FZ_PLATFORM_NAME_V    := $(call get-define,$(FZ_DSC_FILE_V),PLATFORM_NAME)
+FZ_OUTPUT_DIRECTORY_V := $(call get-define,$(FZ_DSC_FILE_V),OUTPUT_DIRECTORY)
+# host-based builds only support NOOPT
+override FZ_TARGET_V  := NOOPT
+
+#for edk2-build
+FZ_DSC_V        := $(PKG_DIR_V)/$(FZ_DIR_V)/$(notdir $(FZ_DSC_FILE_V))
+FZ_MODULE_INF_V := $(FZ_DIR_V)/$(notdir $(FZ_INF_FILE_V))
+
+FZ_BUILD_OUT_V  = $(call abs-out-dir,$(FZ_OUTPUT_DIRECTORY_V))/$(FZ_TARGET_V)_$(TOOLCHAIN_V)/$(ARCH_V)
+FZ_MODULE_DIR_V = $(FZ_BUILD_OUT_V)/$(PKG_DIR_V)/$(basename $(FZ_MODULE_INF_V))
+FZ_BIN_V        = $(FZ_BUILD_OUT_V)/$(FZ_BASE_NAME_V)
+
+# FZ_TIME_V:  seconds to fuzz (empty = until Ctrl+C)   FZ_ARGS_V: extra afl-fuzz args
+# FZ_INPUT_V: file for repro-fuzz                      FZ_DEMO_BUG_V=1: build with the planted bug
+FZ_CC_V        ?= afl-gcc-fast
+FZ_AFL_FUZZ_V  ?= afl-fuzz
+FZ_DEMO_BUG_V  ?= 0
+FZ_TIME_V      ?=
+FZ_ARGS_V      ?=
+FZ_INPUT_V     ?=
+FZ_CORPUS_V    := $(CURDIR)/$(FZ_DIR_V)/corpus
+FZ_OUT_V       ?= $(CURDIR)/logs/fuzz
+# core_pattern -> systemd-coredump makes afl-fuzz refuse to start without the 2nd variable
+FZ_AFL_ENV_V   ?= AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 AFL_AUTORESUME=1
+FZ_REPRO_ENV_V ?= ASAN_OPTIONS=detect_leaks=1:symbolize=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+FZ_DEFINES_V    = -D FUZZ_CC=$(FZ_CC_V) $(if $(filter 1,$(FZ_DEMO_BUG_V)),-D FUZZ_DEMO_BUG=TRUE)
+
+FUZZ_C_FILES_V   := $(shell find $(FZ_DIR_V)/src -type f -name "*.c" 2>/dev/null)
+FUZZ_H_FILES_V   := $(shell find $(FZ_DIR_V)/include -type f -name "*.h" 2>/dev/null)
+FUZZ_SRC_FILES_V := $(FUZZ_C_FILES_V) $(FUZZ_H_FILES_V)
+
+FZ_GOALS_V := build-fuzz copy-fuzz run-fuzz repro-fuzz clean-fuzz
+
+ifneq ($(filter $(FZ_GOALS_V),$(CURRENT_GOALS_V)),)
+ifeq ($(FZ_INF_FILE_V),)
+$(error [ERROR] No .inf file found in $(FZ_DIR_V))
+endif
+ifeq ($(FZ_DSC_FILE_V),)
+$(error [ERROR] No .dsc file found in $(FZ_DIR_V))
+endif
+ifeq ($(FZ_BASE_NAME_V),)
+$(error [ERROR] BASE_NAME not found in $(FZ_INF_FILE_V))
+endif
+ifeq ($(FZ_PLATFORM_NAME_V),)
+$(error [ERROR] PLATFORM_NAME not found in $(FZ_DSC_FILE_V))
+endif
+ifeq ($(FZ_OUTPUT_DIRECTORY_V),)
+$(error [ERROR] OUTPUT_DIRECTORY not found in $(FZ_DSC_FILE_V))
+endif
+ifneq ($(word 2,$(FZ_INF_FILES_V)),)
+$(warning [WARN] Multiple .inf files in $(FZ_DIR_V), using $(notdir $(FZ_INF_FILE_V)))
+endif
+ifneq ($(word 2,$(FZ_DSC_FILES_V)),)
+$(warning [WARN] Multiple .dsc files in $(FZ_DIR_V), using $(notdir $(FZ_DSC_FILE_V)))
+endif
+endif
+
+ifneq ($(filter repro-fuzz,$(CURRENT_GOALS_V)),)
+ifeq ($(strip $(FZ_INPUT_V)),)
+$(error [ERROR] Set FZ_INPUT_V=<file>, e.g. one from $(FZ_OUT_V)/default/crashes/)
+endif
+endif
+
+build-fuzz: override EXTRA_FLAGS_V += $(FZ_DEFINES_V)
+build-fuzz:
+	@command -v $(FZ_CC_V) >/dev/null || { echo "[ERROR] $(FZ_CC_V) not found: install AFL++ or set FZ_CC_V"; exit 1; }
+	@export AFL_QUIET=1 && $(call edk2-build,$(FZ_DSC_V),$(FZ_TARGET_V),$(FZ_MODULE_INF_V),$(FZ_DEFINES_V))
+
+copy-fuzz: build-fuzz
+	@if [ ! -f "$(FZ_BIN_V)" ]; then \
+        echo "[ERROR] $(FZ_BIN_V) not found"; exit 1; \
+    fi
+	cp -f "$(FZ_BIN_V)" ./$(FZ_BASE_NAME_V)
+
+run-fuzz: copy-fuzz
+	@[ -n "$$(ls -A $(FZ_CORPUS_V) 2>/dev/null)" ] || { echo "[ERROR] No seed inputs in $(FZ_CORPUS_V)"; exit 1; }
+	@mkdir -p $(FZ_OUT_V)
+	$(FZ_AFL_ENV_V) $(FZ_AFL_FUZZ_V) -i $(FZ_CORPUS_V) -o $(FZ_OUT_V) \
+        $(if $(strip $(FZ_TIME_V)),-V $(FZ_TIME_V)) $(FZ_ARGS_V) -- ./$(FZ_BASE_NAME_V)
+
+repro-fuzz: copy-fuzz
+	@[ -f "$(FZ_INPUT_V)" ] || { echo "[ERROR] FZ_INPUT_V='$(FZ_INPUT_V)' not found"; exit 1; }
+	$(FZ_REPRO_ENV_V) ./$(FZ_BASE_NAME_V) < "$(FZ_INPUT_V)"
+
+# logs/fuzz (corpus queue + crashes) is kept on purpose, delete it by hand
+clean-fuzz:
+	rm -rf $(FZ_MODULE_DIR_V) $(FZ_BIN_V)
+	rm -f ./$(FZ_BASE_NAME_V)
+
+
+
 #Checking everything
 deep-format-check-all: format-do hook-check #manually invoke this
 
+#TODO: add analyzer AND fuzzing
 hook-check: deep-clean deep-build tidy #auto invoking
 	$(MAKE) -C tools/clang-tidy-uefi hook-check WORKSPACE_DIR_V=$(WORKSPACE_DIR_V)
 

@@ -54,7 +54,7 @@ while IFS= read -r -d '' f; do
                 ;;
         esac
     fi
-done < <(find_targets -name '*.inf' -o -name '*.dsc' -o -name 'Dockerfile' -o -name 'Dockerfile.*' -o -name '*.Dockerfile')
+done < <(find_targets -name '*.inf' -o -name '*.dsc' -o -name 'Dockerfile' -o -name 'Dockerfile.*' -o -name '*.Dockerfile' -o -name '.gitignore')
 
 # 2. File names: only .inf and .dsc (directories are left alone)
 while IFS= read -r -d '' f; do
