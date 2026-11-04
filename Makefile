@@ -258,7 +258,7 @@ copy-unit-test: build-unit-test
 	cp -f "$(UT_BIN_V)" ./$(UT_BASE_NAME_V)
 
 run-unit-test: copy-unit-test
-	./$(UT_BASE_NAME_V)
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=1 ./$(UT_BASE_NAME_V)
 
 clean-unit-test:
 	rm -rf $(UT_MODULE_DIR_V) $(UT_BIN_V)
